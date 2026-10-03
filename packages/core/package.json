@@ -1,0 +1,12 @@
+{
+  "name": "@gamekit/core",
+  "version": "0.1.0",
+  "description": "Fixed-step loop, seeded RNG streams, input map and deterministic state hashing. Framework-free.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "src"],
+  "sideEffects": false
+}
