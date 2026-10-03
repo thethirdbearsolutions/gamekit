@@ -1,0 +1,13 @@
+{
+  "name": "@gamekit/render",
+  "version": "0.1.0",
+  "description": "three.js rendering kit: linear-HDR pipeline with AgX/ACES and selective bloom, shared wave function, water, sky, curved world.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "src"],
+  "sideEffects": false,
+  "peerDependencies": { "three": ">=0.170" }
+}

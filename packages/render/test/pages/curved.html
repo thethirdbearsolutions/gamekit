@@ -1,0 +1,63 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0">
+<script type="module">
+import * as THREE from 'three';
+import { CurvedWorld } from '@gamekit/render';
+try {
+  const curved = CurvedWorld.install();
+  // A quarter turn over 30–60 m, then straight on.
+  curved.path.fromCurvature((s) => (s > 30 && s < 60 ? Math.PI / 2 / 30 : 0));
+  curved.path.drop = 0.0005;
+  curved.sync();
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setSize(256, 256, false);
+  document.body.appendChild(renderer.domElement);
+
+  // 1. GLSL vs JS: write bent world positions into a float target.
+  const pts = [];
+  for (let i = 0; i < 64; i++) pts.push((i % 8) * 3 - 10, (i % 3) * 0.5, -i * 2.7);
+  const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const idx = new Float32Array(64).map((_, i) => i);
+  geo.setAttribute('idx', new THREE.BufferAttribute(idx, 1));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: `attribute float idx; varying vec3 vW;
+      void main() { vec4 w = bendWorld( modelMatrix * vec4( position, 1.0 ) ); vW = w.xyz;
+        gl_PointSize = 1.0; gl_Position = vec4( ( mod( idx, 8.0 ) + 0.5 ) / 4.0 - 1.0, ( floor( idx / 8.0 ) + 0.5 ) / 4.0 - 1.0, 0.0, 1.0 ); }`,
+    fragmentShader: `varying vec3 vW; void main() { gl_FragColor = vec4( vW, 1.0 ); }`,
+  });
+  const scene = new THREE.Scene();
+  scene.add(new THREE.Points(geo, mat));
+  const rt = new THREE.WebGLRenderTarget(8, 8, { type: THREE.FloatType });
+  const cam = new THREE.OrthographicCamera();
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, cam);
+  const px = new Float32Array(8 * 8 * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, 8, 8, px);
+  renderer.setRenderTarget(null);
+  let maxErr = 0;
+  for (let i = 0; i < 64; i++) {
+    const b = curved.path.bend(pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]);
+    maxErr = Math.max(maxErr, Math.abs(b.x - px[i * 4]), Math.abs(b.y - px[i * 4 + 1]), Math.abs(b.z - px[i * 4 + 2]));
+  }
+
+  // 2. Culling: a box 80 m down the straight track is drawn round the turn.
+  const world = new THREE.Scene();
+  world.add(new THREE.AmbientLight(0xffffff, 3));
+  const box = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+  box.position.set(0, 2, -80);
+  world.add(box);
+  const drawn = curved.path.bend(0, 2, -80);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 500);
+  camera.position.set(drawn.x - 30, drawn.y + 10, drawn.z + 30);
+  camera.lookAt(drawn.x, drawn.y, drawn.z);
+  const count = () => { renderer.info.reset(); renderer.info.autoReset = false; renderer.render(world, camera); return renderer.info.render.calls; };
+  world.updateMatrixWorld();
+  const callsBefore = count();
+  curved.updateBounds(world);
+  const callsAfter = count();
+  const read = new Uint8Array(4);
+  const gl = renderer.getContext();
+  gl.readPixels(128, 128, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, read);
+
+  window.__result = { maxErr, drawn, callsBefore, callsAfter, centre: [...read] };
+} catch (e) { window.__error = String(e.stack || e); }
+</script>
