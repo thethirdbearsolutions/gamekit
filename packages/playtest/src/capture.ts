@@ -4,7 +4,7 @@
 // plays at true speed.
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Browser } from 'playwright-core';
+import type { Browser, Page } from 'playwright-core';
 import { launchBrowser } from './browser.js';
 import { writeJson } from './report.js';
 import { contactSheet, framesToMp4, strip } from './video.js';
@@ -36,6 +36,10 @@ export interface CaptureRun {
   /** Filmstrip of N evenly spaced frames. */
   strip?: { frames: number; width?: number } | false;
   keepFrames?: boolean;
+  /** Extra CSS for the page (hide HUD, title screens). */
+  css?: string;
+  /** Runs once the game is ready and paused, before tick 0 (teleport, enable input). */
+  setup?: (page: Page) => Promise<void>;
   browser?: Browser;
 }
 
@@ -67,6 +71,8 @@ export async function capture(run: CaptureRun): Promise<CaptureResult> {
     await page.goto(url.href);
     await page.waitForFunction(() => typeof window.__game?.step === 'function', null, { timeout: 30_000 });
     await page.evaluate(() => window.__game!.pause?.());
+    if (run.css) await page.addStyleTag({ content: run.css });
+    if (run.setup) await run.setup(page);
     const actions = await page.evaluate(() => window.__game!.actions as Record<string, string[]>);
     const key = (a: string) => actions[a]?.[0] ?? (() => { throw new Error(`no key for ${a}`); })();
     const script = [...(run.script ?? [])].sort((a, b) => a.tick - b.tick);
@@ -80,15 +86,19 @@ export async function capture(run: CaptureRun): Promise<CaptureResult> {
     await page.evaluate(() => window.__game!.step!(0));
     await shot(0);
     for (let tick = 0; tick < run.ticks; ) {
-      // Keys for every tick in this chunk must land before the step that samples them.
-      const n = Math.min(every, run.ticks - tick);
-      for (let k = 0; k < n; k++, tick++) {
+      // Keys for a tick land before the step that samples them; ticks with
+      // no input between them run as one batch (one render, not n).
+      const target = Math.min(tick + every, run.ticks);
+      while (tick < target) {
         while (si < script.length && script[si].tick <= tick) {
           const s = script[si++];
           if (s.type !== 'up') await page.keyboard.down(key(s.action));
           if (s.type !== 'down') await page.keyboard.up(key(s.action));
         }
-        await page.evaluate(() => window.__game!.step!(1));
+        const next = si < script.length ? Math.max(script[si].tick, tick + 1) : Infinity;
+        const n = Math.min(target, next) - tick;
+        await page.evaluate((k) => window.__game!.step!(k), n);
+        tick += n;
       }
       await shot(tick);
     }

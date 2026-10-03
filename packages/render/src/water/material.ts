@@ -10,7 +10,7 @@
 //  - fog from three's scene fog (both hand-copied fog settings into uniforms);
 //  - hooks for game-specific looks (falls' rainbow plume and fall streaks).
 import * as THREE from 'three';
-import { FOG_GLSL, modeGlsl, NOISE_GLSL, OUTPUT_GLSL, fogUniforms, type ColorMode } from '../shading.js';
+import { FOG_GLSL, modeGlsl, modeUniforms, NOISE_GLSL, OUTPUT_GLSL, fogUniforms, type ColorMode } from '../shading.js';
 import { wavesGlsl, waveUniforms, type WaveSet } from './waves.js';
 
 export interface WaterOptions {
@@ -109,12 +109,19 @@ void main() {
   col = waterExtra( col, vWorld, n, V, depth );
 #endif
   float fog = gkFogFactor( dist );
-  vec3 hdr = uSunColor * pow( max( dot( n, normalize( V + uSunDir ) ), 0.0 ), uGlint.x ) * uGlint.y;
+  vec3 glint = uSunColor * pow( max( dot( n, normalize( V + uSunDir ) ), 0.0 ), uGlint.x ) * uGlint.y;
+  vec3 hdr = vec3( 0.0 );
 #ifdef WATER_EXTRA_HDR
   hdr += waterExtraHdr( vWorld, n, V, depth );
 #endif
   float alpha = max( mix( uAlpha.x, uAlpha.y, smoothstep( 0.2, 7.0, depth ) ), foam * 0.9 * uFoam.x );
-  gl_FragColor = vec4( toScene( mix( col, fogColor, fog ) ) + hdr * ( 1.0 - fog ), mix( alpha, 1.0, fog ) );
+#ifdef GK_DISPLAY_MODE
+  // As the display-tuned original: the glint clips to its hue, the overflow blooms.
+  vec3 outCol = toSceneHdr( mix( col + glint, fogColor, fog ) );
+#else
+  vec3 outCol = mix( col, fogColor, fog ) + glint * ( 1.0 - fog );
+#endif
+  gl_FragColor = vec4( outCol + hdr * ( 1.0 - fog ), mix( alpha, 1.0, fog ) );
   ${OUTPUT_GLSL}
 }`;
 
@@ -140,7 +147,7 @@ export function createWaterMaterial(o: WaterOptions): THREE.ShaderMaterial {
       ...fogUniforms(),
       ...wu,
       ...(o.extra?.uniforms ?? {}),
-      gkExposure: { value: 1 },
+      ...modeUniforms(),
       uElev: { value: o.elevation?.texture ?? null },
       uElevBounds: { value: o.elevation?.bounds ?? new THREE.Vector4(0, 0, 1, 1) },
       uDefaultDepth: { value: o.defaultDepth ?? 30 },

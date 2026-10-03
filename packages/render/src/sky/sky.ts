@@ -4,7 +4,7 @@
 // horizon haze, harbor drew at the far plane so it never clips). The sun disc
 // is real HDR, so it blooms; the gradient can be authored linear or display.
 import * as THREE from 'three';
-import { modeGlsl, OUTPUT_GLSL, type ColorMode } from '../shading.js';
+import { modeGlsl, modeUniforms, OUTPUT_GLSL, type ColorMode } from '../shading.js';
 
 export interface SkyOptions {
   zenith?: THREE.ColorRepresentation;
@@ -47,7 +47,7 @@ export class SkyDome {
         uGlowSharp: { value: o.glowSharpness ?? 12 },
         uGlow: { value: o.glow ?? 0.25 },
         uHaze: { value: o.haze ?? 0.5 },
-        gkExposure: { value: 1 },
+        ...modeUniforms(),
       },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
@@ -68,7 +68,12 @@ export class SkyDome {
           float s = max( dot( dir, uSunDir ), 0.0 );
           sky += uSunColor * pow( s, uGlowSharp ) * uGlow;
           sky = mix( sky, uHorizon, pow( 1.0 - h, 6.0 ) * uHaze );
-          vec3 col = toScene( sky ) + uSunColor * pow( s, uSunSharp ) * uSunIntensity;
+          vec3 sun = uSunColor * pow( s, uSunSharp ) * uSunIntensity;
+        #ifdef GK_DISPLAY_MODE
+          vec3 col = toSceneHdr( sky + sun ); // as the display-tuned original: disc clips, overflow blooms
+        #else
+          vec3 col = sky + sun;
+        #endif
           gl_FragColor = vec4( col, 1.0 );
           ${OUTPUT_GLSL}
         }`,
@@ -88,5 +93,10 @@ export class SkyDome {
   /** Keep in step with the pipeline's exposure when colorMode is 'display'. */
   set exposure(e: number) {
     this.material.uniforms.gkExposure.value = e;
+  }
+
+  /** 'display' mode: how strongly light past display white turns into HDR. */
+  set hdrGain(g: number) {
+    this.material.uniforms.gkHdrGain.value = g;
   }
 }

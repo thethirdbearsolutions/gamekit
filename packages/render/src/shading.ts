@@ -35,8 +35,16 @@ float gkFogFactor( float d ) { return 0.0; }
 /** Header for a fragment shader in either colour mode. `toScene(c)` converts
  *  the base colour; HDR terms are added after it. */
 export function modeGlsl(mode: ColorMode): string {
-  return mode === 'display' ? `${displayToSceneGlsl()}\n#define toScene( c ) gkDisplayToScene( c )\n` : '#define toScene( c ) ( c )\n';
+  return mode === 'display'
+    ? `${displayToSceneGlsl()}\nuniform float gkHdrGain;\n#define GK_DISPLAY_MODE\n#define toScene( c ) gkDisplayToScene( c )\n#define toSceneHdr( c ) gkDisplayToSceneHdr( c, gkHdrGain )\n`
+    : '#define toScene( c ) ( c )\n#define toSceneHdr( c ) ( c )\n';
 }
+
+/** Uniforms every mode-aware material carries. In 'display' mode highlights
+ *  are added in display space as the original shader did (so they keep
+ *  their clipped, saturated hue) and only what passes 1.0 becomes HDR,
+ *  scaled by gkHdrGain. */
+export const modeUniforms = (exposure = 1, hdrGain = 1.5) => ({ gkExposure: { value: exposure }, gkHdrGain: { value: hdrGain } });
 
 /** Ends a fragment shader so it also renders right without the pipeline. */
 export const OUTPUT_GLSL = /* glsl */ `
