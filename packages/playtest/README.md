@@ -54,17 +54,31 @@ await capture({ name: 'jump', url, outDir: 'out', ticks: 240, every: 4,
 
 Comparing `hashes` between two captures is a regression test for determinism; comparing sheets is a visual diff.
 
-Also: `writeGallery(outDir)` (static index.html over a run), `serveStatic(dir)`, `contactSheet`, `strip`, `webmToMp4`,
-`framesToMp4`, `RunLog`.
+Frame-stepped mode can also run a **closed-loop policy**: `policy(state, ctx)` is called every `policyEvery` ticks,
+and its holds and taps go in as real key events before the next step. It is still deterministic, because it only sees
+sim state. Steering a boat onto a heading works like this:
+
+```js
+await capture({ name: 'tack', url, outDir: 'out', ticks: 60 * 80, every: 2, format: 'jpeg',
+  policy: (s) => ({ hold: s.twa - target > 0.06 ? ['left'] : s.twa - target < -0.06 ? ['right'] : [] }),
+  beats: [{ tick: 0, caption: 'Broad reach' }, { tick: 1200, caption: 'Tacking', run: (page) => page.evaluate(() => …) }],
+  setup: (page) => page.evaluate(() => …), css: '#hud { display: none }' });
+// result.log: [{ tick, caption, state }] per beat
+```
+
+Also: `writeGallery(outDir)` (static index.html over a run), `serveStatic(dir)`, `serveVite(root)`, `contactSheet`,
+`strip`, `webmToMp4`, `framesToMp4`, `RunLog`.
 
 ## Examples
 
 - `examples/climber-bot.mjs` plays the `@gamekit/core` climber example both ways. Run `npm run build`, `npm run examples`
   in another shell, then `node packages/playtest/examples/climber-bot.mjs`. Open `out/climber/index.html`.
+- waterfall-falls (`gamekit-adoption` branch) has `scripts/captures.mjs` (a viewpoint tour for before/after stills)
+  and `scripts/stepped.mjs` (frame-stepped walk that replays to identical hashes).
 - `examples/canopy-bot.mjs` is the seed tree-climbing bot (`seed/canopy-playtest-bot.mjs`) ported onto the harness: the
   three variant policies as pure functions, everything else from the library.
 
 ## Lineage
 
-This merges three tools. The real-time loop and video come from the canopy seed bot. Frame stepping follows the sailing
-lab's recorder (CZY-1144). Sheets and strips replace canopy's capture script.
+This merges three tools. The real-time loop and video come from the canopy seed bot. Frame stepping, the closed-loop pilot,
+captions and jpeg frames follow the sailing lab's recorder (CZY-1144). Sheets and strips replace canopy's capture script.

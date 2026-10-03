@@ -5,9 +5,9 @@ both rebuilt. Use Rapier directly for everything else.
 
 | Export | What |
 | --- | --- |
-| `initRapier()` | Initialise the wasm once (memoised). |
+| `initRapier(module?)` | Initialise a Rapier build's wasm once (memoised per module). The default is rapier3d-compat. Pass rapier2d or a `-deterministic` build to use it. |
 | `createWorld({ gravity, dt, solverIterations })` | World with `timestep` set to the loop's step. |
-| `PhysicsStepper` | Call `step(dt)` from `FixedStepLoop`'s step. It refuses a `dt` that doesn't match the world. It remembers each tracked body's previous pose, so `interpolated(body, alpha)` gives smooth rendering at any refresh rate. `snapshot()` feeds `hashState`. |
+| `PhysicsStepper` | Works with 2D and 3D Rapier. Call `step(dt)` from `FixedStepLoop`'s step. It refuses a `dt` that doesn't match the world. It remembers each tracked body's previous pose, so `interpolated(body, alpha)` gives smooth rendering at any refresh rate. `snapshot()` feeds `hashState`. |
 | `Character` | Kinematic capsule + `KinematicCharacterController`: gravity, slopes, auto-step, snap-to-ground, pushes dynamic bodies. `move(dt, vx, vz, jumpSpeed)` once per step. |
 | `withCcd(desc, { maxSpeed, thinnest })` / `needsCcd` / `dynamicBody` | CCD defaults. Full CCD when one step could carry a body past half of the thinnest thing it can hit. Otherwise use soft CCD prediction. |
 | `applyBuoyancy(body, { points, heightAt, volume })` | Per-point Archimedes force plus drag. Give it the same `heightAt` the water shader uses (`@gamekit/render`'s `waveHeight`), so boats ride the waves you see. |
@@ -26,6 +26,7 @@ const loop = new FixedStepLoop({
 ```
 
 Rapier is deterministic on the same build and platform, so hash `stepper.snapshot()` in tests. Cross-platform determinism
-needs the `-deterministic` Rapier build.
+needs the `-deterministic` Rapier build (the sailing lab uses `rapier2d-deterministic-compat`; there's a test for it).
+`Character`, `withCcd` and `applyBuoyancy` are 3D.
 
 Example: `npm run examples` → <http://127.0.0.1:5199/packages/physics/examples/>.
