@@ -24,6 +24,9 @@ const G = 9.81;
 export interface PackedWaves { a: Float32Array; b: Float32Array; count: number }
 
 export class WaveSet {
+  /** Overall amplitude multiplier (weather); applies in TS and, through
+   *  waveUniforms, in GLSL. */
+  scale = 1;
   readonly packed: PackedWaves = { a: new Float32Array(MAX_WAVES * 4), b: new Float32Array(MAX_WAVES * 4), count: 0 };
 
   constructor(waves: Wave[] = []) {
@@ -61,6 +64,7 @@ export class WaveSet {
       out.z += q * dz * c * (amp * k);
       out.y += amp * Math.sin(th);
     }
+    out.x *= this.scale; out.y *= this.scale; out.z *= this.scale;
     return out;
   }
 
@@ -86,7 +90,7 @@ export class WaveSet {
     for (let i = 0; i < count; i++) {
       const dx = a[i * 4], dz = a[i * 4 + 1], k = a[i * 4 + 2], amp = a[i * 4 + 3];
       const th = k * (dx * x + dz * z) - b[i * 4] * t + b[i * 4 + 2];
-      const wa = k * amp, q = b[i * 4 + 1];
+      const wa = k * amp * this.scale, q = b[i * 4 + 1];
       const S = Math.sin(th), C = Math.cos(th);
       xx -= q * wa * dx * dx * S; xy += wa * dx * C; xz -= q * wa * dx * dz * S;
       zx -= q * wa * dx * dz * S; zy += wa * dz * C; zz -= q * wa * dz * dz * S;
@@ -95,6 +99,13 @@ export class WaveSet {
     const nx = zy * xz - zz * xy, ny = zz * xx - zx * xz, nz = zx * xy - zy * xx;
     const n = Math.hypot(nx, ny, nz);
     return { x: nx / n, y: ny / n, z: nz / n };
+  }
+
+  /** Waves fade as water shoals: full by `full` m deep, gone by `none` m
+   *  (the sailing lab's 6 m / 0.5 m). Multiply heights by it. */
+  static shoaling(depth: number, none = 0.5, full = 6): number {
+    const u = Math.min(1, Math.max(0, (depth - none) / (full - none)));
+    return u * u * (3 - 2 * u);
   }
 
   /** A plausible sea from wind: `count` waves spread ±spread around `direction`. */
@@ -120,6 +131,7 @@ uniform vec4 uWaveA[ ${MAX_WAVES} ];
 uniform vec4 uWaveB[ ${MAX_WAVES} ];
 uniform int uWaveCount;
 uniform float uWaveTime;
+uniform float uWaveScale;
 vec3 gkWaveDisplace( vec2 p, float t ) {
   vec3 o = vec3( 0.0 );
   for ( int i = 0; i < ${MAX_WAVES}; i++ ) {
@@ -130,7 +142,7 @@ vec3 gkWaveDisplace( vec2 p, float t ) {
     o.xz += ( b.y / a.z ) * a.xy * c * ( a.w * a.z );
     o.y += a.w * sin( th );
   }
-  return o;
+  return o * uWaveScale;
 }
 vec3 gkWaveNormal( vec2 p, float t ) {
   vec3 tx = vec3( 1.0, 0.0, 0.0 );
@@ -139,7 +151,7 @@ vec3 gkWaveNormal( vec2 p, float t ) {
     if ( i >= uWaveCount ) break;
     vec4 a = uWaveA[ i ]; vec4 b = uWaveB[ i ];
     float th = a.z * dot( a.xy, p ) - b.x * t + b.z;
-    float wa = a.z * a.w;
+    float wa = a.z * a.w * uWaveScale;
     float qs = b.y * wa * sin( th );
     float c = wa * cos( th );
     tx += vec3( -qs * a.x * a.x, c * a.x, -qs * a.x * a.y );
@@ -157,5 +169,7 @@ export function waveUniforms(set: WaveSet) {
     uWaveB: { value: set.packed.b },
     uWaveCount: { value: set.packed.count },
     uWaveTime: { value: 0 },
+    /** Copy set.scale here when it changes (weather). */
+    uWaveScale: { value: set.scale },
   };
 }

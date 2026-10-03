@@ -1,0 +1,39 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0">
+<script type="module">
+import * as THREE from 'three';
+import { HdrPipeline, SkyDome, WaveSet, createWaterMaterial, elevationTexture, oceanGrid } from '@gamekit/render';
+try {
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setPixelRatio(1);
+  renderer.setSize(256, 256, false);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0xffffff, 0.002);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900);
+  camera.position.set(0, 40, 0);
+  camera.lookAt(0, 0, 0);
+  const sky = new SkyDome();
+  scene.add(sky.mesh);
+  // Ground rises from 20 m deep at x = -40 to dry land past x = +30.
+  const elevation = elevationTexture((x) => -20 + (x + 40) * (22 / 70), { minX: -60, minZ: -60, size: 120 }, 128);
+  const waves = WaveSet.wind({ direction: 0, wavelength: 12, amplitude: 0.3, count: 4 });
+  const results = {};
+  for (const mode of ['linear', 'display']) {
+    const mat = createWaterMaterial({ waves, elevation, colorMode: mode, deep: 0x0b3550, mid: 0x1f7a96, shallow: 0x7fe0d0, ripples: { strength: 0 } });
+    const water = new THREE.Mesh(oceanGrid(200, 120), mat);
+    scene.add(water);
+    const hdr = new HdrPipeline(renderer, scene, camera, { toneMapping: 'aces', samples: 0, dither: false, bloom: { mode: 'off' } });
+    const rt = new THREE.WebGLRenderTarget(256, 256);
+    hdr.render(rt);
+    const px = (x, y) => { const p = new Uint8Array(4); renderer.readRenderTargetPixels(rt, x, y, 1, 1, p); return [...p.slice(0, 3)]; };
+    // Screen x maps to world x through the top-down camera.
+    results[mode] = { deep: px(40, 128), shallow: px(185, 128), land: px(250, 128) };
+    scene.remove(water);
+    hdr.dispose();
+  }
+  const sky2 = new THREE.WebGLRenderTarget(256, 256);
+  camera.position.set(0, 2, 0); camera.lookAt(0, 30, -100);
+  new HdrPipeline(renderer, scene, camera, { toneMapping: 'agx', samples: 0, bloom: { mode: 'off' } }).render(sky2);
+  const s = new Uint8Array(4); renderer.readRenderTargetPixels(sky2, 128, 128, 1, 1, s);
+  window.__result = { ...results, sky: [...s.slice(0, 3)] };
+} catch (e) { window.__error = String(e.stack || e); }
+</script>

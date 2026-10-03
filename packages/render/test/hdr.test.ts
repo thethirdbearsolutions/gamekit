@@ -39,3 +39,20 @@ describe('HdrPipeline in WebGL', () => {
     expect(r.auditClean).toBe(0);
   });
 });
+
+describe('display-referred shaders through the pipeline (FALLS-49)', () => {
+  let rig: Rig;
+  let r: any;
+  beforeAll(async () => { rig = await startRig(); r = await runPage(rig, 'display.html'); }, 120_000);
+  afterAll(() => rig?.close());
+
+  it('gkDisplayToScene keeps a raw shader\'s on-screen look exactly', () => {
+    expect(r.consoleErrors).toEqual([]);
+    r.before.forEach((b: number[], i: number) => expect(close(r.after[i], b, 3)).toBe(true));
+  });
+
+  it('without it the look shifts, which is the FALLS-14 wash', () => {
+    const shift = r.before.map((b: number[], i: number) => Math.max(...b.map((v, k) => Math.abs(v - r.naive[i][k]))));
+    expect(Math.max(...shift)).toBeGreaterThan(30);
+  });
+});
