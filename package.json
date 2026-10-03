@@ -1,13 +1,56 @@
 {
-  "name": "gamekit-monorepo",
+  "name": "gamekit",
+  "version": "0.1.0",
   "private": true,
+  "description": "Third Bear's shared game toolkit: @gamekit/core, playtest, render, physics. Install from git; import 'gamekit/core' etc.",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
+  "exports": {
+    "./core": {
+      "types": "./lib/core/index.d.ts",
+      "import": "./lib/core/index.js"
+    },
+    "./render": {
+      "types": "./lib/render/index.d.ts",
+      "import": "./lib/render/index.js"
+    },
+    "./physics": {
+      "types": "./lib/physics/index.d.ts",
+      "import": "./lib/physics/index.js"
+    },
+    "./playtest": {
+      "types": "./lib/playtest/index.d.ts",
+      "import": "./lib/playtest/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "packages/*/README.md"
+  ],
   "scripts": {
-    "build": "tsc -b packages/core packages/physics packages/render packages/playtest",
+    "build": "tsc -b packages/core packages/physics packages/render packages/playtest && node scripts/lib.mjs",
     "typecheck": "tsc -b packages/core packages/physics packages/render packages/playtest --noEmit false",
     "test": "vitest run",
-    "examples": "vite --config vite.examples.config.ts"
+    "examples": "vite --config vite.examples.config.ts",
+    "prepare": "npm run build"
+  },
+  "peerDependencies": {
+    "three": ">=0.170",
+    "@dimforge/rapier3d-compat": ">=0.14",
+    "playwright-core": ">=1.50"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    },
+    "@dimforge/rapier3d-compat": {
+      "optional": true
+    },
+    "playwright-core": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "^0.19.0",
