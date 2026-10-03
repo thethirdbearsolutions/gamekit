@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0">
+<script type="module">
+import * as THREE from 'three';
+import { WaveSet, wavesGlsl, waveUniforms } from '@gamekit/render';
+try {
+  const waves = WaveSet.wind({ direction: 0.4, wavelength: 18, amplitude: 0.6, count: 5, seed: 3 });
+  const t = 7.25;
+  const renderer = new THREE.WebGLRenderer();
+  const pts = [], idx = [];
+  for (let i = 0; i < 64; i++) { pts.push((i % 8) * 4.3 - 15, 0, Math.floor(i / 8) * 5.1 - 20); idx.push(i); }
+  const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  geo.setAttribute('idx', new THREE.Float32BufferAttribute(idx, 1));
+  const make = (out) => new THREE.ShaderMaterial({
+    uniforms: { ...waveUniforms(waves), uWaveTime: { value: t } },
+    vertexShader: wavesGlsl() + `attribute float idx; varying vec3 vO;
+      void main() { vO = ${out}; gl_PointSize = 1.0;
+        gl_Position = vec4( ( mod( idx, 8.0 ) + 0.5 ) / 4.0 - 1.0, ( floor( idx / 8.0 ) + 0.5 ) / 4.0 - 1.0, 0.0, 1.0 ); }`,
+    fragmentShader: 'varying vec3 vO; void main() { gl_FragColor = vec4( vO, 1.0 ); }',
+  });
+  const rt = new THREE.WebGLRenderTarget(8, 8, { type: THREE.FloatType });
+  const run = (out) => {
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Points(geo, make(out)));
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, new THREE.OrthographicCamera());
+    const px = new Float32Array(256);
+    renderer.readRenderTargetPixels(rt, 0, 0, 8, 8, px);
+    return px;
+  };
+  const d = run('gkWaveDisplace( position.xz, uWaveTime )');
+  const n = run('gkWaveNormal( position.xz, uWaveTime )');
+  let errD = 0, errN = 0;
+  for (let i = 0; i < 64; i++) {
+    const a = waves.displace(pts[i * 3], pts[i * 3 + 2], t);
+    const b = waves.normalAt(pts[i * 3], pts[i * 3 + 2], t);
+    errD = Math.max(errD, Math.abs(a.x - d[i * 4]), Math.abs(a.y - d[i * 4 + 1]), Math.abs(a.z - d[i * 4 + 2]));
+    errN = Math.max(errN, Math.abs(b.x - n[i * 4]), Math.abs(b.y - n[i * 4 + 1]), Math.abs(b.z - n[i * 4 + 2]));
+  }
+  window.__result = { errD, errN };
+} catch (e) { window.__error = String(e.stack || e); }
+</script>
