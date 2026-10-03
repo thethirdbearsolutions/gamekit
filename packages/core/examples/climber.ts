@@ -27,7 +27,7 @@ export function createClimber(seed: number | string) {
     const f: InputFrame<Action> = input.sample(tick);
     if (s.won) return;
     const dir = (f.held('right') ? 1 : 0) - (f.held('left') ? 1 : 0);
-    s.vx += (dir * 260 - s.vx) * Math.min(1, dt * (s.onGround ? 14 : 4));
+    s.vx += (dir * 260 - s.vx) * Math.min(1, dt * (s.onGround ? 14 : 8));
     if (f.pressed('jump') && s.onGround) { s.vy = 440; s.onGround = false; s.events.push({ tick, type: 'jump', y: s.y }); }
     s.vy -= 1100 * dt;
     const prevY = s.y;

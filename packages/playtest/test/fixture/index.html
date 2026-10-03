@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>playtest fixture</title>
+<style>body{margin:0;background:#123}canvas{display:block}</style>
+<canvas id="c" width="320" height="180"></canvas>
+<script>
+  // A dot that walks right while ArrowRight is held and hops on Space.
+  // Fixed 60 Hz steps; keys are latched like @gamekit/core's InputMap.
+  const c = document.getElementById('c').getContext('2d');
+  const down = new Set(), pressed = new Set();
+  addEventListener('keydown', (e) => { if (!down.has(e.code)) pressed.add(e.code); down.add(e.code); });
+  addEventListener('keyup', (e) => down.delete(e.code));
+  const s = { tick: 0, x: 10, y: 0, vy: 0, hops: 0 };
+  const events = [];
+  function step() {
+    if (down.has('ArrowRight')) s.x += 2;
+    if (pressed.has('Space') && s.y === 0) { s.vy = 5; s.hops++; events.push({ type: 'hop', tick: s.tick }); }
+    pressed.clear();
+    s.vy -= 0.3; s.y = Math.max(0, s.y + s.vy); if (s.y === 0) s.vy = 0;
+    s.tick++;
+  }
+  function draw() {
+    c.fillStyle = '#123'; c.fillRect(0, 0, 320, 180);
+    c.fillStyle = '#fc4'; c.fillRect(s.x % 320, 160 - s.y * 4, 12, 12);
+  }
+  let raf = 0, acc = 0, last = 0;
+  function frame(t) { if (last) { acc += Math.min(0.25, (t - last) / 1000); while (acc >= 1 / 60) { step(); acc -= 1 / 60; } } last = t; draw(); raf = requestAnimationFrame(frame); }
+  const paused = new URLSearchParams(location.search).get('paused') === '1';
+  window.__game = {
+    state: () => ({ ...s }),
+    actions: { right: ['ArrowRight'], hop: ['Space'] },
+    events: () => events,
+    hash: () => `${s.tick}:${s.x}:${s.y.toFixed(6)}:${s.hops}`,
+    step: (n = 1) => { for (let i = 0; i < n; i++) step(); draw(); },
+    pause: () => { cancelAnimationFrame(raf); raf = 0; },
+    resume: () => { last = 0; raf = requestAnimationFrame(frame); },
+  };
+  if (!paused) raf = requestAnimationFrame(frame);
+</script>
