@@ -1,0 +1,13 @@
+{
+  "name": "@gamekit/physics",
+  "version": "0.1.0",
+  "description": "Thin Rapier helpers: fixed-step bridge with interpolation, kinematic character controller, CCD defaults, buoyancy.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "src"],
+  "sideEffects": false,
+  "peerDependencies": { "@dimforge/rapier3d-compat": ">=0.14", "@gamekit/core": "0.1.x" }
+}
