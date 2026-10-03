@@ -56,3 +56,22 @@ describe('display-referred shaders through the pipeline (FALLS-49)', () => {
     expect(Math.max(...shift)).toBeGreaterThan(30);
   });
 });
+
+describe('fog under the pipeline', () => {
+  let rig: Rig;
+  beforeAll(async () => { rig = await startRig(); }, 120_000);
+  afterAll(() => rig?.close());
+  const diff = (a: number[][], b: number[][]) => Math.max(...a.flatMap((p, i) => p.map((v, k) => Math.abs(v - b[i][k]))));
+
+  it('three blends fog after tone mapping, so linear fog differs at distance', async () => {
+    const r = await runPage(rig, 'fog.html');
+    expect(r.consoleErrors).toEqual([]);
+    expect(diff(r.direct, r.piped)).toBeGreaterThan(15);
+  });
+
+  it('installDisplayFog reproduces three\'s direct-render fog exactly', async () => {
+    const r = await runPage(rig, 'fog.html?patch=1');
+    expect(r.consoleErrors).toEqual([]);
+    expect(diff(r.direct, r.piped)).toBeLessThanOrEqual(3);
+  });
+});

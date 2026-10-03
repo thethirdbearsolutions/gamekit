@@ -64,6 +64,11 @@ vec3 gkDisplayToScene( vec3 display ) {
   vec3 v = ( -B - sqrt( B * B - 4.0 * A * C ) ) / ( 2.0 * A );
   return max( ${mat(IN_INV)} * v, 0.0 ) * 0.6 / gkExposure;
 }
+// Display-tuned shaders often push glints past 1.0, where the screen clipped
+// them. Keep the in-range part exact and carry the overflow on as HDR.
+vec3 gkDisplayToSceneHdr( vec3 display, float gain ) {
+  return gkDisplayToScene( display ) + max( display - 1.0, 0.0 ) * gain;
+}
 `;
 }
 

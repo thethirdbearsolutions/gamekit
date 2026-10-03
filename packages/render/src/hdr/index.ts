@@ -3,3 +3,4 @@ export { BloomChain, type BloomOptions } from './bloom.js';
 export { auditShaders, type ShaderFinding } from './audit.js';
 export { pass as fullscreenPass, FullscreenPass, FULLSCREEN_VS } from './fullscreen.js';
 export { acesDisplay, displayToScene, displayToSceneGlsl, displayUniforms } from './display.js';
+export { installDisplayFog } from './display-fog.js';
