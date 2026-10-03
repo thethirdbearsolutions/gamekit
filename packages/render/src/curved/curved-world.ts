@@ -17,6 +17,8 @@ export interface CurvedWorldOptions extends PathConfig {
   /** GLSL defining `vec4 bendPre( vec4 w )`, run on world positions before
    *  the bend: game-specific warps (chaotic-attack's road widening) go here. */
   pre?: string;
+  /** Uniforms that `pre` reads, shared by every bending material. */
+  uniforms?: Record<string, THREE.IUniform>;
   /** Extra bounds radius factor for bent objects (default 1.25). */
   boundsSlack?: number;
 }
@@ -37,7 +39,7 @@ let active: CurvedWorld | null = null;
 
 export class CurvedWorld {
   readonly path: BendPath;
-  readonly uniforms: { uBendPath: { value: Float32Array }; uBendCut: { value: number }; uBendDrop: { value: number } };
+  readonly uniforms: { uBendPath: { value: Float32Array }; uBendCut: { value: number }; uBendDrop: { value: number } } & Record<string, THREE.IUniform>;
   private readonly declare: string;
   private readonly slack: number;
   private readonly _sphere = new THREE.Sphere();
@@ -52,7 +54,7 @@ export class CurvedWorld {
   private constructor(opts: CurvedWorldOptions) {
     this.path = new BendPath(opts);
     this.slack = opts.boundsSlack ?? 1.25;
-    this.uniforms = { uBendPath: { value: this.path.data }, uBendCut: { value: this.path.cut }, uBendDrop: { value: 0 } };
+    this.uniforms = { ...opts.uniforms, uBendPath: { value: this.path.data }, uBendCut: { value: this.path.cut }, uBendDrop: { value: 0 } };
     this.declare = `#define GAMEKIT_BEND\n${opts.pre ? '#define GAMEKIT_BEND_PRE\n' : ''}${bendGlsl(this.path.samples, this.path.step)}${opts.pre ?? ''}\n`;
     const chunks = THREE.ShaderChunk as unknown as Record<string, string>;
     for (const [name, find, replace] of PATCHES) {
