@@ -104,3 +104,31 @@ describe('hashState', () => {
     expect(hashState(0)).toBe(hashState(-0));
   });
 });
+
+describe('holdsToScript and hash32', () => {
+  it('turns hold ranges into a script that replays through the input map', async () => {
+    const { holdsToScript, ScriptedInput } = await import('@gamekit/core');
+    const m = new InputMap({ right: ['ArrowRight'], jump: ['Space'] });
+    const s = new ScriptedInput(m, holdsToScript({ right: [0, 3], jump: [[1, 2], [4, 5]] }));
+    const seen = [];
+    for (let t = 0; t < 6; t++) { s.apply(t); const f = m.sample(t); seen.push(`${+f.held('right')}${+f.pressed('jump')}`); }
+    expect(seen).toEqual(['10', '11', '10', '00', '01', '00']);
+  });
+
+  it('hash32 is stateless and spread out', async () => {
+    const { hash32, hash01 } = await import('@gamekit/core');
+    expect(hash32(1, 2, 3)).toBe(hash32(1, 2, 3));
+    expect(hash32(1, 2, 3)).not.toBe(hash32(1, 3, 2));
+    const v = hash01(7, 5);
+    expect(v >= 0 && v < 1).toBe(true);
+  });
+});
+
+describe('FixedStepLoop drift', () => {
+  it('never lands a step late from float frame times', () => {
+    let steps = 0;
+    const loop = new FixedStepLoop({ hz: 60, step: () => steps++ });
+    for (let i = 0; i < 6000; i++) loop.advance(1 / 60);
+    expect(steps).toBe(6000);
+  });
+});

@@ -50,4 +50,20 @@ describe('playtest', () => {
     expect(a.finalState).toMatchObject({ tick: 60, x: 90, hops: 1 });
     for (const f of [a.video!, a.sheet!, a.strip!]) expect(statSync(f).size).toBeGreaterThan(500);
   });
+
+  it('frame-stepped capture can run a closed-loop policy with captions, deterministically', async () => {
+    type S = { x: number; tick: number };
+    const policy: Policy<S> = (st) => ({ hold: st.x < 60 ? ['right'] : [], tap: st.tick === 30 ? ['hop'] : [] });
+    const run = (name: string) => capture({ name, url: site.url, outDir: out, ticks: 90, every: 10, policy, policyEvery: 5,
+      beats: [{ tick: 0, caption: 'walk right' }, { tick: 45, caption: 'stop at x=60' }],
+      viewport: { width: 320, height: 180 }, sheet: false, fps: 0, format: 'jpeg' });
+    const a = await run('pilot-a');
+    const b = await run('pilot-b');
+    expect(a.hashes).toEqual(b.hashes);
+    // Reads every 5 ticks, so it overshoots 60 by at most one interval of 2 px/tick.
+    expect((a.finalState as S).x).toBeGreaterThanOrEqual(60);
+    expect((a.finalState as S).x).toBeLessThanOrEqual(70);
+    expect(a.finalState).toMatchObject({ hops: 1 });
+    expect(a.log.map((l) => l.caption)).toEqual(['walk right', 'stop at x=60']);
+  });
 });

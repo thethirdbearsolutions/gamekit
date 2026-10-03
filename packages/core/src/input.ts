@@ -17,6 +17,16 @@ export interface InputFrame<A extends string> {
   readonly bits: number;
 }
 
+/** Per-step snapshot as three bitmasks; methods look actions up by index.
+ *  Cheap enough to sample ~10^5 times per second in headless searches. */
+class Frame<A extends string> implements InputFrame<A> {
+  constructor(private readonly index: ReadonlyMap<A, number>, readonly tick: number, readonly bits: number,
+    private readonly pressedBits: number, private readonly releasedBits: number) {}
+  held(a: A): boolean { return (this.bits & (1 << this.index.get(a)!)) !== 0; }
+  pressed(a: A): boolean { return (this.pressedBits & (1 << this.index.get(a)!)) !== 0; }
+  released(a: A): boolean { return (this.releasedBits & (1 << this.index.get(a)!)) !== 0; }
+}
+
 export interface ScriptEvent<A extends string> {
   tick: number;
   action: A;
@@ -27,6 +37,7 @@ export interface ScriptEvent<A extends string> {
 export class InputMap<A extends string> {
   readonly actions: readonly A[];
   private readonly keyToAction = new Map<string, A>();
+  private readonly index = new Map<A, number>();
   private readonly keysDown = new Set<string>();
   private readonly pendingPress = new Set<A>();
   private readonly pendingRelease = new Set<A>();
@@ -36,6 +47,7 @@ export class InputMap<A extends string> {
   constructor(readonly bindings: Bindings<A>) {
     this.actions = Object.keys(bindings) as A[];
     if (this.actions.length > 31) throw new Error('InputMap: at most 31 actions');
+    this.actions.forEach((a, i) => this.index.set(a, i));
     for (const a of this.actions) {
       for (const key of bindings[a]) {
         const prev = this.keyToAction.get(key);
@@ -95,21 +107,17 @@ export class InputMap<A extends string> {
 
   /** Read input for one fixed step. Call exactly once per step. */
   sample(tick: number): InputFrame<A> {
-    const held = new Set<A>();
-    for (const a of this.actions) if (this.isHeld(a) || this.pendingPress.has(a)) held.add(a);
-    const pressed = new Set(this.pendingPress);
-    const released = new Set(this.pendingRelease);
+    let held = 0, pressed = 0, released = 0;
+    this.actions.forEach((a, i) => {
+      if (this.pendingPress.has(a)) pressed |= 1 << i;
+      if (this.pendingRelease.has(a)) released |= 1 << i;
+      // A tap that went down and up between samples still counts as held for one step.
+      if (this.isHeld(a) || this.pendingPress.has(a)) held |= 1 << i;
+    });
     this.pendingPress.clear();
     this.pendingRelease.clear();
     this.lastTick = tick;
-    let bits = 0;
-    this.actions.forEach((a, i) => { if (held.has(a)) bits |= 1 << i; });
-    return {
-      tick, bits,
-      held: (a) => held.has(a),
-      pressed: (a) => pressed.has(a),
-      released: (a) => released.has(a),
-    };
+    return new Frame(this.index, tick, held, pressed, released);
   }
 
   /** Listen to keyboard events on a DOM target. Returns a detach function. */
@@ -145,6 +153,17 @@ export class InputMap<A extends string> {
     this.recording = null;
     return r;
   }
+}
+
+/** Hold ranges → script: `{ right: [0, 30], jump: [[5, 7], [40, 42]] }` holds
+ *  each action on ticks [start, end). The canopy lab's compact test format. */
+export function holdsToScript<A extends string>(holds: Partial<Record<A, [number, number] | [number, number][]>>): ScriptEvent<A>[] {
+  const out: ScriptEvent<A>[] = [];
+  for (const [action, ranges] of Object.entries(holds) as [A, [number, number] | [number, number][]][]) {
+    const list = (Array.isArray(ranges[0]) ? ranges : [ranges]) as [number, number][];
+    for (const [s, e] of list) out.push({ tick: s, action, type: 'down' }, { tick: e, action, type: 'up' });
+  }
+  return out.sort((a, b) => a.tick - b.tick || (a.type === 'up' ? -1 : 1));
 }
 
 /** Replays a script into an InputMap; call `apply(tick)` before `sample(tick)`. */

@@ -75,3 +75,15 @@ describe('fog under the pipeline', () => {
     expect(diff(r.direct, r.piped)).toBeLessThanOrEqual(3);
   });
 });
+
+describe('untonemapped shaders (encoded but never tone mapped)', () => {
+  let rig: Rig;
+  beforeAll(async () => { rig = await startRig(); }, 120_000);
+  afterAll(() => rig?.close());
+
+  it('colorMode untonemapped keeps their on-screen look through the pipeline', async () => {
+    const r = await runPage(rig, 'untonemapped.html');
+    expect(r.consoleErrors).toEqual([]);
+    r.before.forEach((b: number[], i: number) => expect(close(r.after[i], b, 3)).toBe(true));
+  });
+});

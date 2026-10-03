@@ -4,9 +4,13 @@ import { displayToSceneGlsl } from './hdr/display.js';
 
 /** 'linear': colours are scene-linear (the default; what new shaders should do).
  *  'display': colours were tuned as display values for a raw shader drawn
- *  straight to the canvas; the base result is converted with
- *  gkDisplayToScene so the look survives the HDR pipeline unchanged. */
-export type ColorMode = 'linear' | 'display';
+ *  straight to the canvas (no tone mapping, no sRGB encoding: waterfall-falls);
+ *  the base result is converted with gkDisplayToScene so the look survives
+ *  the HDR pipeline unchanged.
+ *  'untonemapped': linear colours from a shader that sRGB-encoded but never
+ *  tone mapped (it had colorspace_fragment but not tonemapping_fragment: the
+ *  sailing lab); same idea, encoded first. */
+export type ColorMode = 'linear' | 'display' | 'untonemapped';
 
 export const NOISE_GLSL = /* glsl */ `
 float gkHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
@@ -35,9 +39,12 @@ float gkFogFactor( float d ) { return 0.0; }
 /** Header for a fragment shader in either colour mode. `toScene(c)` converts
  *  the base colour; HDR terms are added after it. */
 export function modeGlsl(mode: ColorMode): string {
-  return mode === 'display'
-    ? `${displayToSceneGlsl()}\nuniform float gkHdrGain;\n#define GK_DISPLAY_MODE\n#define toScene( c ) gkDisplayToScene( c )\n#define toSceneHdr( c ) gkDisplayToSceneHdr( c, gkHdrGain )\n`
-    : '#define toScene( c ) ( c )\n#define toSceneHdr( c ) ( c )\n';
+  if (mode === 'linear') return '#define toScene( c ) ( c )\n#define toSceneHdr( c ) ( c )\n';
+  const enc = mode === 'untonemapped'
+    ? 'vec3 gkEncode( vec3 c ) { c = max( c, 0.0 ); return mix( pow( c, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), c * 12.92, vec3( lessThanEqual( c, vec3( 0.0031308 ) ) ) ); }\n'
+    : '#define gkEncode( c ) ( c )\n';
+  return `${displayToSceneGlsl()}\nuniform float gkHdrGain;\n${enc}#define GK_DISPLAY_MODE\n` +
+    '#define toScene( c ) gkDisplayToScene( gkEncode( c ) )\n#define toSceneHdr( c ) gkDisplayToSceneHdr( gkEncode( c ), gkHdrGain )\n';
 }
 
 /** Uniforms every mode-aware material carries. In 'display' mode highlights

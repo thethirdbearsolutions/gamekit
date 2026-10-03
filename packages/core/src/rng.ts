@@ -16,6 +16,19 @@ export function hashString(s: string, seed = 0): [number, number] {
   return [h1 >>> 0, h2 >>> 0];
 }
 
+/** Stateless integer hash of (seed, a, b) → uint32, for lattice noise and
+ *  per-cell decisions where a stream would depend on visiting order
+ *  (from the sailing lab's rng). */
+export function hash32(seed: number, a: number, b = 0): number {
+  let h = seed ^ Math.imul(a | 0, 0x27d4eb2d) ^ Math.imul(b | 0, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** hash32 mapped to [0, 1). */
+export const hash01 = (seed: number, a: number, b = 0): number => hash32(seed, a, b) / 4294967296;
+
 export type RngState = [number, number, number, number];
 
 export class Rng {

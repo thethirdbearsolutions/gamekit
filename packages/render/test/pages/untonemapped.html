@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0">
+<script type="module">
+import * as THREE from 'three';
+import { HdrPipeline, modeGlsl, modeUniforms } from '@gamekit/render';
+try {
+  const renderer = new THREE.WebGLRenderer();
+  renderer.setPixelRatio(1);
+  renderer.setSize(64, 64, false);
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 10);
+  camera.position.z = 5;
+  const colours = [[0.2, 0.05, 0.01], [0.02, 0.3, 0.5], [0.8, 0.85, 0.9], [0.5, 0.04, 0.6]];
+  const exposure = 1.05;
+  // The sailing lab's pattern: linear colour, colorspace_fragment, no tonemapping_fragment.
+  const quads = colours.map((c, i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+      uniforms: { ...modeUniforms(exposure), c: { value: new THREE.Vector3(...c) }, wrap: { value: 0 } },
+      vertexShader: 'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }',
+      fragmentShader: modeGlsl('untonemapped') + `uniform vec3 c; uniform float wrap;
+void main() {
+  gl_FragColor = vec4( wrap > 0.5 ? toScene( c ) : c, 1.0 );
+  if ( wrap < 0.5 ) {
+#include <colorspace_fragment>
+  }
+}`,
+    }));
+    m.position.set(i % 2 ? 0.5 : -0.5, i < 2 ? 0.5 : -0.5, 0);
+    scene.add(m);
+    return m;
+  });
+  const at = [[16, 48], [48, 48], [16, 16], [48, 16]];
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = exposure;
+  renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const before = at.map(([x, y]) => { const p = new Uint8Array(4); gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p); return [...p.slice(0, 3)]; });
+  for (const q of quads) q.material.uniforms.wrap.value = 1;
+  const hdr = new HdrPipeline(renderer, scene, camera, { toneMapping: 'aces', exposure, samples: 0, dither: false, bloom: { mode: 'off' } });
+  const rt = new THREE.WebGLRenderTarget(64, 64);
+  hdr.render(rt);
+  const after = at.map(([x, y]) => { const p = new Uint8Array(4); renderer.readRenderTargetPixels(rt, x, y, 1, 1, p); return [...p.slice(0, 3)]; });
+  window.__result = { before, after };
+} catch (e) { window.__error = String(e.stack || e); }
+</script>

@@ -27,3 +27,13 @@ export async function serveStatic(dir: string, port = 0): Promise<{ url: string;
   const url = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : port}/`;
   return { url, server, close: () => new Promise((r) => server.close(() => r())) };
 }
+
+/** Start a vite dev server for a game (vite is an optional peer). Both labs'
+ *  capture scripts started their own; this is that, once. */
+export async function serveVite(root: string, config: Record<string, unknown> = {}): Promise<{ url: string; close: () => Promise<void> }> {
+  const { createServer } = await import('vite');
+  const server = await createServer({ root, logLevel: 'error', server: { port: 0, host: '127.0.0.1' }, ...config });
+  await server.listen();
+  const addr = server.httpServer!.address();
+  return { url: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}/`, close: () => server.close() };
+}

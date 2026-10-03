@@ -36,7 +36,7 @@ export class FixedStepLoop {
 
   /** Interpolation factor for the current frame. */
   get alpha(): number {
-    return this.acc / this.dt;
+    return Math.min(1, this.acc / this.dt);
   }
 
   /** Feed `frameDt` seconds of real time; runs whole steps, then renders.
@@ -44,7 +44,9 @@ export class FixedStepLoop {
   advance(frameDt: number): number {
     this.acc += Math.max(0, frameDt);
     let n = 0;
-    while (this.acc >= this.dt) {
+    // The epsilon keeps 1/60 s accumulated from float frame times from
+    // landing a step late (from the canopy lab's loop).
+    while (this.acc >= this.dt - 1e-9) {
       if (n === this.maxStepsPerFrame) {
         const keep = this.acc % this.dt;
         this.dropped += this.acc - keep;
@@ -52,7 +54,7 @@ export class FixedStepLoop {
         break;
       }
       this.stepFn(this.dt, this.tick++);
-      this.acc -= this.dt;
+      this.acc = Math.max(0, this.acc - this.dt);
       n++;
     }
     this.renderFn?.(this.alpha, frameDt);
