@@ -11,7 +11,8 @@ three.js rendering pieces shared across the 3D games (WebGL today; see "WebGPU" 
 | `createWaterMaterial`, `oceanGrid`, `followCamera`, `elevationTexture` | Water merged from the sailing lab and waterfall-falls: depth-aware colour and shore foam, distance-faded ripples, fresnel, HDR glint, scene fog, game hooks. | Done, used by waterfall-falls |
 | `SkyDome` | Sky merged from both: gradient, sun disc and glow, horizon haze, drawn at the far plane. | Done, used by waterfall-falls |
 | `gkDisplayToScene`, colour modes | Bridge for shaders tuned without tone mapping (`display`, `untonemapped`): same pixels through the pipeline, overflow becomes HDR. | Done, GPU-tested |
-| `installDisplayFog` | Keeps three's direct-render fog (applied after tone mapping) inside the pipeline. | Done, GPU-tested |
+| `installDisplayFog` | Keeps three's direct-render fog (applied after tone mapping) inside the pipeline. ACES only. | Done, GPU-tested |
+| Display pass (`HdrPipeline({ display })`, `gkOverlayOut`) | Draws display-referred content (saturated raw shaders, translucent veils) after tone mapping through three's direct path, depth-tested, still able to glow. | Done, GPU-tested, used by waterfall-falls |
 
 ## HDR pipeline
 
@@ -32,7 +33,9 @@ Rules for materials (built-in materials already follow them):
 
 Why this order matters (the FALLS-49 class of bug) is in [docs/render/hdr.md](../../docs/render/hdr.md).
 
-**Moving an existing game onto the pipeline without changing its look.** Shaders written for three's direct path often
+**Moving an existing game onto the pipeline without changing its look.** Send translucent, display-tuned content
+(raw shaders with neon colours, veils, particles) to the **display pass**: `display: { transparent: true }`. It is
+exact, because it is three's own path. For opaque display-tuned shaders (a sky dome), use the colour modes below. Shaders written for three's direct path often
 skip tone mapping (they lack `tonemapping_fragment`), so their colours are display-tuned. Give gamekit's materials
 `colorMode: 'display'` (no sRGB encoding either, like waterfall-falls) or `'untonemapped'` (encoded but not tone mapped,
 like the sailing lab). For your own shaders, prepend `modeGlsl(mode)`, end with `gl_FragColor.rgb = toScene( col )` or

@@ -29,3 +29,29 @@ for every material, built-in or custom (the `tonemapping_fragment` and `colorspa
 `packages/render/test/hdr.test.ts` renders the same mid-grey through three's own AgX path, through the pipeline with a
 built-in material and through the pipeline with a bare custom shader. All three agree within 2/255. Selective bloom glows
 around the selected object, leaves an equally bright unselected one alone, and doesn't change the custom shader's pixels.
+
+## Content that can't go through tone mapping: the display pass
+
+Some content was made for three's direct path and can't survive a tone mapper unchanged:
+
+- **Bright saturated colours.** ACES cannot show pure green above about 70% brightness, or saturated yellow above
+  about 60%. A raw shader that skipped tone mapping could, and falls' rainbows were made that way.
+  `gkDisplayToScene` picks the closest colour ACES can show along the same hue (green 30,184,17; red 235,0,14).
+  That is close, but not the same.
+- **Translucent veils.** A 60%-opaque white sheet over dark rock looks one way blended on screen and another way
+  blended in linear light. It reads as solid in linear.
+
+`HdrPipeline({ display: { transparent: true } })` (or `display.layer` for chosen objects) draws such content
+**after** tone mapping. The opaque scene fills the depth buffer, then three's own direct path draws these objects:
+its tone mapping, sRGB, fog, blending and transparent sorting. That is exactly the look they were made for. GPU test:
+within 3/255 of three's direct render, saturated bands included.
+
+They can still feed bloom. A shader that ends with `gl_FragColor = gkOverlayOut( col, alpha, glow )` and sits on the
+bloom layer contributes `glow` (scene-linear) to the bloom source.
+
+The trade-off: display-pass objects aren't lit or bloomed by the HDR pass beyond their own glow, and they always draw
+over transparent HDR-pass objects. Use the display pass for content that was made display-referred. Author new content
+in linear.
+
+waterfall-falls uses this (see its `docs/gamekit-adoption/`). The first migration used only the bridge, and an
+independent review caught the lost rainbow bands and solid sheets that this pass fixes.
