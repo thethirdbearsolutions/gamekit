@@ -36,6 +36,6 @@ window.__game = {
   hash: game.hash,
   pause: () => loop.stop(),
   resume: () => loop.start(),
-  step: (n = 1) => { for (let i = 0; i < n; i++) loop.runSteps(1); loop.advance(0); },
+  step: (n = 1) => { loop.runSteps(n); loop.redraw(); },
 };
 if (params.get('paused') !== '1') loop.start();

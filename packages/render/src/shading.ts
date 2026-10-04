@@ -34,7 +34,18 @@ float gkFogFactor( float d ) { return smoothstep( fogNear, fogFar, d ); }
 #else
 const vec3 fogColor = vec3( 0.0 );
 float gkFogFactor( float d ) { return 0.0; }
-#endif`;
+#endif
+// The fog colour as three's direct path saw it: sRGB-encoded on the canvas
+// (TONE_MAPPING defined), linear in a render target (encode it here), so
+// display-mode materials fog the same in and out of the pipeline.
+vec3 gkFogColorDisplay() {
+#ifdef TONE_MAPPING
+  return fogColor;
+#else
+  vec3 c = max( fogColor, 0.0 );
+  return mix( pow( c, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), c * 12.92, vec3( lessThanEqual( c, vec3( 0.0031308 ) ) ) );
+#endif
+}`;
 
 /** Header for a fragment shader in either colour mode. `toScene(c)` converts
  *  the base colour; HDR terms are added after it. */

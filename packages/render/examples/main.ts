@@ -117,7 +117,7 @@ declare global { interface Window { __game: unknown } }
 window.__game = {
   state: () => ({ tick: loop.tick, tone: hdr.toneMapping, bloom: hdr.bloomMode, curve, exposure: hdr.exposure, calls: renderer.info.render.calls }),
   actions: { tone: ['KeyT'], bloom: ['KeyB'], curve: ['KeyC'], brighter: ['ArrowUp'], darker: ['ArrowDown'] },
-  step: (n = 1) => { loop.runSteps(n); loop.advance(0); },
+  step: (n = 1) => { loop.runSteps(n); loop.redraw(); },
   pause: () => loop.stop(),
   resume: () => loop.start(),
 };

@@ -82,7 +82,7 @@ window.__game = {
   state: () => ({ tick: loop.tick, x: ch.position.x, y: ch.position.y, grounded: ch.grounded, raftY: raft.translation().y }),
   actions: { left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Space'] },
   hash: () => hashState(stepper.snapshot()),
-  step: (n = 1) => { loop.runSteps(n); loop.advance(0); },
+  step: (n = 1) => { loop.runSteps(n); loop.redraw(); },
   pause: () => loop.stop(),
   resume: () => loop.start(),
 };

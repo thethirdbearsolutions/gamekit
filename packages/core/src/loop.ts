@@ -61,6 +61,12 @@ export class FixedStepLoop {
     return n;
   }
 
+  /** Render now without advancing time; alpha 1 shows the latest step
+   *  (after runSteps, so a captured frame matches the state it hashes). */
+  redraw(alpha = 1): void {
+    this.renderFn?.(alpha, 0);
+  }
+
   /** Run exactly `n` steps with no rendering (tests, headless sims, capture). */
   runSteps(n: number): void {
     for (let i = 0; i < n; i++) this.stepFn(this.dt, this.tick++);

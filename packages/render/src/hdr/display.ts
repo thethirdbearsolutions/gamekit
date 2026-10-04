@@ -41,28 +41,79 @@ export function acesDisplay(linear: number[], exposure = 1): number[] {
   return mul(OUT, v).map((c) => oetf(clamp(c, 0, 1)));
 }
 
-/** Inverse of acesDisplay for in-gamut display colours below `ceiling`. */
-export function displayToScene(display: number[], exposure = 1, ceiling = 0.985): number[] {
+/** Exact inverse, unclamped (may be negative: not every display colour is
+ *  something ACES can produce). */
+function rawInverse(display: number[], ceiling: number): number[] {
   const y = mul(OUT_INV, display.map((c) => eotf(clamp(c, 0, ceiling))));
-  const v = mul(IN_INV, y.map((c) => rrtInv(clamp(c, 0, ceiling))));
-  return v.map((c) => (Math.max(0, c) * 0.6) / exposure);
+  return mul(IN_INV, y.map((c) => rrtInv(clamp(c, 0, ceiling))));
+}
+
+/** Darkening factors tried for colours ACES can't reach. */
+const SCALES = [1, 0.92, 0.85, 0.78, 0.72, 0.66, 0.6, 0.54];
+
+/** Inverse of acesDisplay. In-gamut colours come back exactly. ACES can't
+ *  show some bright saturated colours (pure green tops out near 70%
+ *  brightness), so for those it picks, among a few darkenings of the colour
+ *  along its own hue, the one whose clamped inverse lands closest on screen.
+ *  Simply clamping negatives at full brightness bleaches greens, cyans and
+ *  yellows to pastel; darkening alone over-darkens red. */
+export function displayToScene(display: number[], exposure = 1, ceiling = 0.985): number[] {
+  let best = rawInverse(display, ceiling);
+  if (Math.min(...best) < -1e-4) {
+    let bestErr = Infinity;
+    for (const s of SCALES) {
+      const x = rawInverse(display.map((c) => c * s), ceiling).map((c) => Math.max(0, c));
+      const d = acesDisplay(x.map((c) => c * 0.6), 1);
+      const err = d.reduce((e, v, i) => e + (v - display[i]) ** 2, 0);
+      if (err < bestErr) { bestErr = err; best = x; }
+    }
+  }
+  return best.map((c) => (Math.max(0, c) * 0.6) / exposure);
 }
 
 const f = (n: number) => n.toFixed(7);
 const mat = (m: M3) => `mat3( ${m.map(f).join(', ')} )`;
+
+/** GLSL mat3 literals for the inverse ACES matrices (shared with display fog). */
+export const ACES_INV_GLSL = { in: mat(IN_INV), out: mat(OUT_INV) };
 
 /** GLSL: `vec3 gkDisplayToScene( vec3 display )`, uses uniform gkExposure
  *  (set it to the pipeline's exposure; displayUniforms() provides it). */
 export function displayToSceneGlsl(ceiling = 0.985): string {
   return /* glsl */ `
 uniform float gkExposure;
-vec3 gkDisplayToScene( vec3 display ) {
+vec3 gkAcesInverseRaw( vec3 display ) {
   vec3 c = clamp( display, 0.0, ${f(ceiling)} );
   c = mix( pow( c * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), c * 0.0773993808, vec3( lessThanEqual( c, vec3( 0.04045 ) ) ) );
   vec3 y = clamp( ${mat(OUT_INV)} * c, 0.0, ${f(ceiling)} );
   vec3 A = 0.983729 * y - 1.0, B = 0.432951 * y - 0.0245786, C = 0.238081 * y + 0.000090537;
   vec3 v = ( -B - sqrt( B * B - 4.0 * A * C ) ) / ( 2.0 * A );
-  return max( ${mat(IN_INV)} * v, 0.0 ) * 0.6 / gkExposure;
+  return ${mat(IN_INV)} * v;
+}
+vec3 gkAcesForward( vec3 c ) { // three's ACES + sRGB at exposure 1 (c already scaled by 1/0.6)
+  c = mat3( ${IN.map(f).join(', ')} ) * c;
+  c = ( c * ( c + 0.0245786 ) - 0.000090537 ) / ( c * ( 0.983729 * c + 0.4329510 ) + 0.238081 );
+  c = clamp( mat3( ${OUT.map(f).join(', ')} ) * c, 0.0, 1.0 );
+  return mix( pow( c, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), c * 12.92, vec3( lessThanEqual( c, vec3( 0.0031308 ) ) ) );
+}
+// Colours ACES can't reach (bright saturated primaries): try a few darkenings
+// along the hue and keep the one that lands closest on screen, instead of
+// bleaching to pastel. Same rule as displayToScene() in JS.
+vec3 gkDisplayToScene( vec3 display ) {
+  vec3 x = gkAcesInverseRaw( display );
+  if ( min( x.r, min( x.g, x.b ) ) < -1e-4 ) {
+    float scales[ ${SCALES.length} ] = float[]( ${SCALES.map((v) => v.toFixed(2)).join(', ')} );
+    float bestErr = 1e9;
+    vec3 best = vec3( 0.0 );
+    for ( int i = 0; i < ${SCALES.length}; i++ ) {
+      vec3 t = max( gkAcesInverseRaw( display * scales[ i ] ), 0.0 );
+      vec3 d = gkAcesForward( t ) - display;
+      float e = dot( d, d );
+      if ( e < bestErr ) { bestErr = e; best = t; }
+    }
+    x = best;
+  }
+  return max( x, 0.0 ) * 0.6 / gkExposure;
 }
 // Display-tuned shaders often push glints past 1.0, where the screen clipped
 // them. Keep the in-range part exact and carry the overflow on as HDR.

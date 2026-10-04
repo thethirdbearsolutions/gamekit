@@ -117,7 +117,7 @@ void main() {
   float alpha = max( mix( uAlpha.x, uAlpha.y, smoothstep( 0.2, 7.0, depth ) ), foam * 0.9 * uFoam.x );
 #ifdef GK_DISPLAY_MODE
   // As the display-tuned original: the glint clips to its hue, the overflow blooms.
-  vec3 outCol = toSceneHdr( mix( col + glint, fogColor, fog ) );
+  vec3 outCol = toSceneHdr( mix( col + glint, gkFogColorDisplay(), fog ) );
 #else
   vec3 outCol = mix( col, fogColor, fog ) + glint * ( 1.0 - fog );
 #endif

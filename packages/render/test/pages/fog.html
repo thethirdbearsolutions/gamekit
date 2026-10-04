@@ -5,7 +5,7 @@ import { HdrPipeline, installDisplayFog } from '@gamekit/render';
 try {
   const exposure = 1.05;
   const fogOn = new URLSearchParams(location.search).get('patch') === '1';
-  if (fogOn) installDisplayFog(exposure);
+  if (fogOn) installDisplayFog();
   const renderer = new THREE.WebGLRenderer();
   renderer.setPixelRatio(1);
   renderer.setSize(64, 64, false);

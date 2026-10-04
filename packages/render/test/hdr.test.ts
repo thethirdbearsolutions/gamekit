@@ -87,3 +87,26 @@ describe('untonemapped shaders (encoded but never tone mapped)', () => {
     r.before.forEach((b: number[], i: number) => expect(close(r.after[i], b, 3)).toBe(true));
   });
 });
+
+describe('display pass', () => {
+  let rig: Rig;
+  let r: any;
+  beforeAll(async () => { rig = await startRig(); r = await runPage(rig, 'overlay.html'); }, 120_000);
+  afterAll(() => rig?.close());
+
+  it('draws translucent, display-tuned content exactly as three\'s direct path did', () => {
+    expect(r.consoleErrors).toEqual([]);
+    expect(r.items).toBe(2); // the sheet and the sprite
+    r.direct.forEach((d: number[], i: number) => expect(close(r.piped[i], d, 3), `sample ${i}: ${d} vs ${r.piped[i]}`).toBe(true));
+  });
+
+  it('keeps saturated rainbow bands (green, cyan) that ACES itself cannot show', () => {
+    const green = r.piped[2];
+    expect(green[1]).toBeGreaterThan(green[0] + 60);
+  });
+
+  it('lets display-pass objects feed bloom', () => {
+    const lum = (c: number[]) => c[0] + c[1] + c[2];
+    expect(lum(r.glow)).toBeGreaterThan(lum(r.noGlow) + 15);
+  });
+});
